@@ -1,0 +1,330 @@
+
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+.wrap { max-width: 800px; padding: 1rem 0 3rem; font-size: 14px; line-height: 1.6; color: var(--color-text-primary); }
+.pitfall { margin-bottom: 2.5rem; }
+.pitfall-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.num { width: 26px; height: 26px; border-radius: 50%; background: var(--color-background-danger); color: var(--color-text-danger); font-size: 12px; font-weight: 500; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.pitfall-title { font-size: 15px; font-weight: 500; color: var(--color-text-primary); }
+.code-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; margin-bottom: 8px; }
+@media (max-width: 560px) { .code-row { grid-template-columns: 1fr; } }
+.code-block { border-radius: var(--border-radius-md); padding: 12px 14px; }
+.bad { background: var(--color-background-danger); border: 0.5px solid var(--color-border-danger); }
+.good { background: var(--color-background-success); border: 0.5px solid var(--color-border-success); }
+.code-label { font-size: 11px; font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; margin-bottom: 6px; }
+.bad .code-label { color: var(--color-text-danger); }
+.good .code-label { color: var(--color-text-success); }
+pre { font-family: var(--font-mono); font-size: 12px; white-space: pre-wrap; line-height: 1.65; color: var(--color-text-primary); }
+.explain { font-size: 13px; color: var(--color-text-secondary); background: var(--color-background-secondary); border-radius: var(--border-radius-md); padding: 10px 14px; margin-top: 6px; line-height: 1.65; }
+.explain b { font-weight: 500; color: var(--color-text-primary); }
+.divider { height: 0.5px; background: var(--color-border-tertiary); margin: 2rem 0; }
+.section-label { font-size: 11px; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--color-text-secondary); margin-bottom: 16px; padding-bottom: 6px; border-bottom: 0.5px solid var(--color-border-tertiary); }
+.single-block { border-radius: var(--border-radius-md); padding: 12px 14px; margin-bottom: 8px; }
+</style>
+
+<div class="wrap">
+
+<div class="section-label">AWK — common pitfalls (detailed)</div>
+
+<div class="pitfall">
+  <div class="pitfall-header">
+    <div class="num">1</div>
+    <div class="pitfall-title">Initializing variables inside the body block</div>
+  </div>
+  <div class="code-row">
+    <div class="code-block bad">
+      <div class="code-label">wrong</div>
+      <pre>{
+  max = 0        # resets every line!
+  if ($2 > max) max = $2
+}
+END { print max }</pre>
+    </div>
+    <div class="code-block good">
+      <div class="code-label">correct</div>
+      <pre>BEGIN { max = 0 }   # initialized once
+
+NR > 1 {
+  if ($2 > max) max = $2
+}
+END { print max }</pre>
+    </div>
+  </div>
+  <div class="explain">
+    The body block runs <b>once per line</b>. So <code>max = 0</code> inside body resets max to 0 every single line before the comparison even happens. Final output will always be the last line's value, not the true maximum.<br><br>
+    <b>Rule:</b> Running totals, max/min, counters meant to survive across lines — always initialize in <code>BEGIN</code>.
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="pitfall">
+  <div class="pitfall-header">
+    <div class="num">2</div>
+    <div class="pitfall-title">Printing NR in the body to get total line count</div>
+  </div>
+  <div class="code-row">
+    <div class="code-block bad">
+      <div class="code-label">wrong</div>
+      <pre>{
+  print NR   # prints 1, 2, 3... per line
+             # not the total!
+}</pre>
+    </div>
+    <div class="code-block good">
+      <div class="code-label">correct</div>
+      <pre>{
+  # body — do your processing
+}
+END {
+  print "Total lines:", NR
+}</pre>
+    </div>
+  </div>
+  <div class="explain">
+    <code>NR</code> = Number of Records read <b>so far</b>. In the body, it's just a running counter (1 on line 1, 2 on line 2...). Only in <code>END</code> does it hold the final total, because all lines have been read by then.<br><br>
+    <b>Note:</b> NR increments for every line regardless of whether your condition matched or not.
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="pitfall">
+  <div class="pitfall-header">
+    <div class="num">3</div>
+    <div class="pitfall-title">Using NR as denominator when file has a header</div>
+  </div>
+  <div class="code-row">
+    <div class="code-block bad">
+      <div class="code-label">wrong</div>
+      <pre>{ total += $4 }
+END {
+  avg = total / NR   # NR = 11, but 1 line
+                     # was header, not data!
+  print avg
+}</pre>
+    </div>
+    <div class="code-block good">
+      <div class="code-label">correct</div>
+      <pre>NR > 1 { total += $4; count++ }
+END {
+  avg = total / count  # only data lines
+  print avg
+}</pre>
+    </div>
+  </div>
+  <div class="explain">
+    If your file has 10 data rows + 1 header = 11 lines total. NR will be 11. Dividing by 11 gives wrong average. <b>Always use your own counter</b> that only increments for actual data rows.<br><br>
+    Alternatively: <code>total / (NR - 1)</code> works only if you're sure there's exactly one header. Counter approach is safer.
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="pitfall">
+  <div class="pitfall-header">
+    <div class="num">4</div>
+    <div class="pitfall-title">Forgetting to skip the header — string becomes "max"</div>
+  </div>
+  <div class="code-row">
+    <div class="code-block bad">
+      <div class="code-label">wrong — header gets compared</div>
+      <pre>{ if ($2 > max) max = $2 }
+END { print "Max age:", max }
+
+# Output: Max age: Employee
+# "Employee" > any number in AWK!</pre>
+    </div>
+    <div class="code-block good">
+      <div class="code-label">correct — skip header first</div>
+      <pre>BEGIN { max = 0 }
+NR > 1 {
+  if ($2 > max) max = $2
+}
+END { print "Max age:", max }</pre>
+    </div>
+  </div>
+  <div class="explain">
+    AWK is <b>very lenient</b> with type comparisons. When comparing a string like "Employee" to a number, AWK doesn't throw an error — it just treats the string as greater. So your header row wins every comparison and becomes the "maximum".<br><br>
+    <b>Rule:</b> Whenever doing numeric comparisons (max, min, sum, avg), always skip the header row with <code>NR &gt; 1</code>.
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="pitfall">
+  <div class="pitfall-header">
+    <div class="num">5</div>
+    <div class="pitfall-title">Writing a variable inside quotes — prints literal text</div>
+  </div>
+  <div class="code-row">
+    <div class="code-block bad">
+      <div class="code-label">wrong</div>
+      <pre>END {
+  print "Total salary sum"
+  # Output: Total salary sum
+  # (just the string, not the value!)
+}</pre>
+    </div>
+    <div class="code-block good">
+      <div class="code-label">correct</div>
+      <pre>END {
+  print "Total salary:", sum
+  # Output: Total salary: 450000
+  # string label + actual variable
+}</pre>
+    </div>
+  </div>
+  <div class="explain">
+    Anything inside <b>double quotes</b> in AWK is a string literal. The variable name is not interpreted inside quotes — it's printed as-is. Keep the variable <b>outside</b> the quotes, separated by a comma.<br><br>
+    <code>print "Label:", variable</code> — this is the safe pattern to remember.
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="pitfall">
+  <div class="pitfall-header">
+    <div class="num">6</div>
+    <div class="pitfall-title">Using regex inside == (exact match operator)</div>
+  </div>
+  <div class="code-row">
+    <div class="code-block bad">
+      <div class="code-label">wrong — regex not allowed here</div>
+      <pre>$3 == /Engineer/  { print }
+# This does NOT do regex match.
+# == expects exact string only.
+
+$4 == /[0-9]+/    { print }
+# Also wrong — numeric range
+# cannot be used with ==</pre>
+    </div>
+    <div class="code-block good">
+      <div class="code-label">correct</div>
+      <pre># For regex — use ~ (match) or !~ (not match)
+$3 ~ /Engineer/   { print }
+$3 ~ /^Eng/       { print }  # starts with Eng
+
+# For exact string — use ==
+$3 == "Engineer"  { print }
+
+# For numeric comparison — use operators
+$4 > 30000        { print }</pre>
+    </div>
+  </div>
+  <div class="explain">
+    <code>==</code> is for exact string or number equality. It needs the right-hand side to be a literal string in quotes.<br>
+    <code>~</code> is for regex matching — pattern goes inside <code>/forward slashes/</code>.<br>
+    <code>!~</code> means "does not match" the pattern.<br><br>
+    <b>Never mix them:</b> <code>$3 == /pattern/</code> won't work as expected.
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="pitfall">
+  <div class="pitfall-header">
+    <div class="num">7</div>
+    <div class="pitfall-title">Per-line counter initialized in BEGIN instead of body</div>
+  </div>
+  <div class="code-row">
+    <div class="code-block bad">
+      <div class="code-label">wrong — for prime check per line</div>
+      <pre>BEGIN { count = 0 }  # initialized once,
+                      # never resets per line!
+{
+  n = $1
+  for (i = 2; i < n; i++)
+    if (n % i == 0) count++
+  # count keeps growing across lines
+  if (count == 0) print n, "prime"
+}</pre>
+    </div>
+    <div class="code-block good">
+      <div class="code-label">correct — reset inside body per line</div>
+      <pre>{
+  n = $1
+  count = 0   # reset for EACH new number
+  for (i = 2; i < n; i++)
+    if (n % i == 0) { count++; break }
+  if (count == 0) print n, "prime"
+  else            print n, "not prime"
+}</pre>
+    </div>
+  </div>
+  <div class="explain">
+    This is the <b>opposite</b> of pitfall #1. For counters that should reset per line (like checking each number independently), initialize inside the body — not in BEGIN.<br><br>
+    <b>Rule of thumb:</b><br>
+    — Cross-line accumulation (sum, max, total count) → <code>BEGIN</code><br>
+    — Per-line fresh start (divisibility count, flag) → inside body
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="pitfall">
+  <div class="pitfall-header">
+    <div class="num">8</div>
+    <div class="pitfall-title">sort — using lexicographic order for numbers</div>
+  </div>
+  <div class="code-row">
+    <div class="code-block bad">
+      <div class="code-label">wrong — no -n flag</div>
+      <pre>sort file.txt
+# Lexicographic output:
+# 100
+# 23
+# 45
+# 9
+# (100 comes first because '1' < '2')</pre>
+    </div>
+    <div class="code-block good">
+      <div class="code-label">correct — with -n flag</div>
+      <pre>sort -n file.txt
+# Numeric output:
+# 9
+# 23
+# 45
+# 100</pre>
+    </div>
+  </div>
+  <div class="explain">
+    By default, <code>sort</code> uses <b>dictionary/lexicographic order</b> — it compares characters left to right. So 100 comes before 9 because '1' &lt; '9'. This is correct for words but completely wrong for numbers.<br><br>
+    <b>Always add <code>-n</code></b> when sorting numerical data. Add <code>-r</code> for descending order. Add <code>-k2</code> to sort by the 2nd column.
+  </div>
+</div>
+
+<div class="divider"></div>
+
+<div class="pitfall">
+  <div class="pitfall-header">
+    <div class="num">9</div>
+    <div class="pitfall-title">sort with tab separator — missing the dollar sign</div>
+  </div>
+  <div class="code-row">
+    <div class="code-block bad">
+      <div class="code-label">wrong</div>
+      <pre>sort -k2 -n -r -t\t file.txt
+# \t here is treated as TWO characters
+# backslash + t, not a real tab.
+# sort gets confused.</pre>
+    </div>
+    <div class="code-block good">
+      <div class="code-label">correct</div>
+      <pre>sort -k2 -n -r -t$'\t' file.txt
+#               ^ dollar sign needed!
+# $'\t' tells bash to interpret \t
+# as an actual tab character.
+
+# For pipe separator — no dollar needed:
+sort -k2 -n -r -t'|' file.txt</pre>
+    </div>
+  </div>
+  <div class="explain">
+    <code>\t</code> is a two-character sequence (backslash + letter t). The <code>-t</code> flag in sort expects a <b>single character</b> as separator. Without <code>$</code>, bash just passes the literal two characters, and sort doesn't recognize it as a tab.<br><br>
+    <b>The fix:</b> <code>$'\t'</code> — the dollar sign triggers bash's ANSI-C quoting, which converts <code>\t</code> into an actual tab character before passing it to sort.<br><br>
+    For single-character separators like <code>|</code>, <code>,</code>, or space — no dollar needed.
+  </div>
+</div>
+
+</div>
